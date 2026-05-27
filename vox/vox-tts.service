@@ -1,0 +1,21 @@
+[Unit]
+Description=VoxCPM2 TTS + Realtime Bridge (Mate)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__DEST__
+Environment=VOX_DEVICE=cuda
+Environment=VOX_PORT=8080
+Environment=VOX_WARMUP=1
+# Auth açmak için: Environment=VOX_API_KEY=...  (iOS Settings'te aynı token)
+Environment=HF_HUB_DISABLE_XET=1
+ExecStart=__DEST__/.venv/bin/uvicorn server:app --host 0.0.0.0 --port 8080 --workers 1
+Restart=always
+RestartSec=3
+# Model belleğe yüklenirken zaman tanı
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,9 @@
+{
+  "name": "mate-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Mate Core bundles Pi Agent as a local npm dep so the Ubuntu deploy doesn't depend on a global install.",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.74.0"
+  }
+}

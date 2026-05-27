@@ -1,0 +1,49 @@
+name: Mate
+options:
+  bundleIdPrefix: uk.drascom
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+packages:
+  WhisperKit:
+    url: https://github.com/argmaxinc/WhisperKit
+    from: "0.13.0"
+targets:
+  Mate:
+    type: application
+    platform: iOS
+    sources:
+      - path: Mate
+        excludes:
+          - Info.plist
+    dependencies:
+      - package: WhisperKit
+    info:
+      path: Mate/Info.plist
+      properties:
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        LSRequiresIPhoneOS: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UILaunchScreen:
+          UIColorName: ""
+        NSMicrophoneUsageDescription: "Mate sesini dinlemek ve cevap üretmek için mikrofona erişir."
+        NSSpeechRecognitionUsageDescription: "Wake word algılaması (örn: \"mate\") için cihaz üzerinde konuşma tanıma kullanır."
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+          NSAllowsArbitraryLoads: true
+        UIBackgroundModes:
+          - audio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: uk.drascom.mate
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ENABLE_PREVIEWS: "YES"
+        GENERATE_INFOPLIST_FILE: "NO"
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: "59P494J56R"
+        CODE_SIGN_IDENTITY: "Apple Development"

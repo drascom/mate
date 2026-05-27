@@ -1,0 +1,15 @@
+{
+  "users": [
+    {
+      "username": "doktor",
+      "admin": true,
+      "created": "2026-05-12T22:45:13Z"
+    },
+    {
+      "username": "havva",
+      "admin": false,
+      "created": "2026-05-12T22:46:25Z"
+    }
+  ],
+  "current_user": "doktor"
+}

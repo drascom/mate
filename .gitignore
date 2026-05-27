@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+
+# Secrets / tokens — ASLA commit edilmez (depo public)
+.token
+.env
+.env.*
+*.pem
+*.key
+secrets.*
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.gradio/
+
+# Node
+node_modules/
+
+# Xcode — proje XcodeGen ile project.yml'den üretilir
+*.xcodeproj/
+build/
+DerivedData/
+*.xcuserstate
+*.xcuserdatad/
+
+# ML model cache / derlenmiş modeller (büyük, indirilebilir)
+**/models/
+*.mlmodelc/
+*.mlpackage/
+
+# Ses örnekleri / kayıtlar (büyük binary)
+*.wav
+*.m4a
+
+# Loglar / runtime
+*.log
+*.jsonl
+
+# Büyük örnek metinler
+vox/zaman_uzerine_full.txt
+vox/zaman_sample.txt
