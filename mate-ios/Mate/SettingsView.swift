@@ -28,6 +28,15 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Ses Motoru") {
+                    Picker("Dil", selection: $draftLanguage) {
+                        Text("Türkçe").tag("tr")
+                        Text("İngilizce").tag("en-US")
+                        Text("Almanca").tag("de-DE")
+                        Text("Fransızca").tag("fr-FR")
+                        Text("İspanyolca").tag("es-ES")
+                    }
+                    .pickerStyle(.menu)
+
                     Picker("STT Motoru", selection: $draftUseWhisperSTT) {
                         Text("Whisper (turbo)").tag(true)
                         Text("Apple").tag(false)

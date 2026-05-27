@@ -23,6 +23,9 @@ targets:
       properties:
         CFBundleShortVersionString: "1.0"
         CFBundleVersion: "1"
+        # Yalnız standart iOS HTTPS/TLS kullanılıyor (özel kripto yok) → export
+        # compliance muaf; App Store Connect'te şifreleme sorusu sorulmaz.
+        ITSAppUsesNonExemptEncryption: false
         LSRequiresIPhoneOS: true
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
