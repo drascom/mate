@@ -29,6 +29,14 @@ curl http://SUNUCU_IP:8808/health      # {"status":"ok","device":"cuda",...}
 ```
 Uçlar: `WS /ws` (gerçek zamanlı), `POST /v1/audio/speech`, `GET /v1/voices`, `GET /health`.
 
+### Tutarlı ses (sabit ses kimliği)
+VoxCPM2 referanssız üretimde her seferinde **farklı bir ses** üretir (zero-shot, VAE
+stokastik). Bunu önlemek için sunucu **sabit bir standart sesin** (`voices/<ad>.wav`)
+referansını **bir kez** `prompt_cache`'e encode edip her istekte aynısını kullanır →
+**çıkan ses her zaman aynı**. Standart ses `VOX_STANDARD_VOICE` ile seçilir (varsayılan
+`deneme`); yeni ses eklemek için `voices/` altına 5–15 sn temiz bir `.wav` koymak yeterli
+(opsiyonel aynı adlı `.txt` referans metni klonlamayı iyileştirir).
+
 ## Mobil uygulamayı bağlama (mate-ios)
 ```bash
 cd mate-ios && xcodegen generate && open Mate.xcodeproj   # ⌘R ile cihaza yükle
