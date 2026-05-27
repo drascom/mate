@@ -35,7 +35,7 @@ final class SettingsStore: ObservableObject {
         self.bargeInEnabled = defaults.object(forKey: "bargeInEnabled") as? Bool ?? true
         self.useOnDeviceTTS = defaults.object(forKey: "useOnDeviceTTS") as? Bool ?? false
         self.onDeviceVoiceId = defaults.string(forKey: "onDeviceVoiceId") ?? ""
-        self.useWhisperSTT = defaults.object(forKey: "useWhisperSTT") as? Bool ?? true
-        self.bridgeWSURL = defaults.string(forKey: "bridgeWSURL") ?? "ws://192.168.0.183:8643/ws"
+        self.useWhisperSTT = defaults.object(forKey: "useWhisperSTT") as? Bool ?? false  // ilk açılış: Apple (sıfır indirme)
+        self.bridgeWSURL = defaults.string(forKey: "bridgeWSURL") ?? "ws://192.168.0.150:8808/ws"
     }
 }

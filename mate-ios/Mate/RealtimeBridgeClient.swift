@@ -35,6 +35,9 @@ final class RealtimeBridgeClient: NSObject {
     var onAudioEnd: ((_ id: String) -> Void)?
     var onError: ((_ id: String?, _ message: String) -> Void)?
     var onClose: ((_ reason: String) -> Void)?
+    /// Sunucuya gerçekten ulaşıldı mı (pong/mesaj geldi → true; kopma/timeout → false).
+    /// UI'da "Sunucu bağlantısı yok" banner'ı için.
+    var onReachable: ((_ reachable: Bool) -> Void)?
 
     private(set) var isConnected = false
 
@@ -49,11 +52,16 @@ final class RealtimeBridgeClient: NSObject {
     // Kalıcı oturum: bağlı olduğumuz adres + oturumun açık kalması isteniyor mu.
     private var currentURL: URL?
     private var shouldStayConnected = false
+    // Sunucudan ilk mesaj/pong geldi mi (gerçek erişilebilirlik onayı).
+    private var confirmedReachable = false
 
     override init() {
         let cfg = URLSessionConfiguration.default
-        cfg.timeoutIntervalForRequest = 30
-        cfg.waitsForConnectivity = true
+        // Ulaşılamayan bridge'de hızlı fallback: el sıkışma 8 sn'de olmazsa başarısız
+        // (eskiden 30 sn asılıp cihaz TTS'e geç düşüyordu). waitsForConnectivity kapalı →
+        // host yoksa beklemeden hata ver.
+        cfg.timeoutIntervalForRequest = 8
+        cfg.waitsForConnectivity = false
         self.session = URLSession(configuration: cfg)
         super.init()
     }
@@ -85,14 +93,19 @@ final class RealtimeBridgeClient: NSObject {
         let task = session.webSocketTask(with: url)
         self.task = task
         isConnected = true
+        confirmedReachable = false
         task.resume()
         receiveLoop()
         startKeepAlive()
-        print("[Bridge] connected: \(url.absoluteString)")
+        // Erken ping → pong gelince erişilebilirlik hızlı onaylanır (banner kalkar).
+        Task { [weak self] in try? await self?.ping() }
+        print("[Bridge] connecting: \(url.absoluteString)")
     }
 
     func disconnect(reason: String = "client") {
         shouldStayConnected = false          // kasıtlı kapatma → otomatik yeniden bağlanma yok
+        confirmedReachable = false
+        onReachable?(false)
         keepAliveTask?.cancel()
         keepAliveTask = nil
         guard task != nil else { return }
@@ -177,12 +190,18 @@ final class RealtimeBridgeClient: NSObject {
                 switch result {
                 case .failure(let error):
                     self.isConnected = false
+                    self.confirmedReachable = false
+                    self.onReachable?(false)
                     print("[Bridge] receive error: \(error.localizedDescription)")
                     self.onClose?(error.localizedDescription)
                     if self.shouldStayConnected, let url = self.currentURL {
                         self.scheduleReconnect(url)
                     }
                 case .success(let message):
+                    if !self.confirmedReachable {
+                        self.confirmedReachable = true
+                        self.onReachable?(true)   // ilk mesaj/pong → sunucu erişilebilir
+                    }
                     self.handle(message: message)
                     // Bir sonraki frame'i dinlemeye devam et.
                     if self.isConnected { self.receiveLoop() }

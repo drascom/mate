@@ -58,6 +58,12 @@ final class ConversationManager: ObservableObject {
     @Published private(set) var modelLoading: Bool = false
     /// Whisper model indirme ilerlemesi (0.0–1.0). prewarmModel sırasında güncellenir.
     @Published private(set) var modelProgress: Double = 0
+    /// Whisper modeli yüklendi mi (hazır). Rozet bunu yansıtır: model inene kadar
+    /// SFSpeech (Apple) kullanıldığı için bu false iken rozet "Apple" gösterir.
+    @Published private(set) var whisperReady: Bool = false
+    /// Sunucuya (bridge) erişilebilirlik: nil=henüz bilinmiyor, true=bağlı, false=yok.
+    /// false iken ana ekranda "Sunucu bağlantısı yok" banner'ı gösterilir.
+    @Published private(set) var serverConnected: Bool?
     @Published var isRunning: Bool = false
     // SwiftUI nested ObservableObject re-render etmiyor; recorder.level ve
     // player.amplitude'ı buradan re-publish edip view'lar conversation'a
@@ -177,6 +183,9 @@ final class ConversationManager: ObservableObject {
             self.realtimeError = message
             self.player.finishPCMStream()
         }
+        bridge.onReachable = { [weak self] reachable in
+            self?.serverConnected = reachable
+        }
         bridge.onClose = { [weak self] reason in
             guard let self else { return }
             print("[Bridge] closed: \(reason)")
@@ -230,6 +239,7 @@ final class ConversationManager: ObservableObject {
                 Task { @MainActor in self?.modelProgress = p }
             })
             modelLoading = false
+            whisperReady = WhisperSTT.modelReady   // hazır olunca rozet "Whisper"a döner
         }
     }
 
@@ -854,10 +864,9 @@ final class ConversationManager: ObservableObject {
 
         try? await Task.sleep(nanoseconds: postPlaybackDelay)
         mark("Tur tamamlandı (realtime bridge)")
-        // ECHO: sunucu şu an SADECE ses döndürüyor, cevap METNİ yok → assistant
-        // satırı = gönderilen user metniyle AYNI (echo). TODO: LLM eklenince bridge
-        // cevap metnini gönderecek; assistant satırı oradan gelecek.
-        appendMessage(.assistant, text)
+        // NOT: Feed yalnız kullanıcının söylediklerini gösterir (echo'da asistan satırı
+        // gereksiz tekrar olurdu). TODO: LLM eklenince bridge cevap METNİNİ gönderince
+        // burada appendMessage(.assistant, reply) ile asistan satırı geri eklenecek.
         // TTS sonrası ~0.6 sn yankı yatışması: kendi sesinin kuyruğu boş segment açmasın.
         await postResponseListen(echoSettle: 0.6)
     }
@@ -898,9 +907,8 @@ final class ConversationManager: ObservableObject {
 
             try? await Task.sleep(nanoseconds: postPlaybackDelay)
             mark("Tur tamamlandı (cihaz TTS)")
-            // ECHO: cevap metni yok → assistant satırı = user metni (echo).
-            // TODO: LLM eklenince bridge cevap metnini gönderecek.
-            appendMessage(.assistant, text)
+            // Feed yalnız kullanıcı satırlarını gösterir (echo'da asistan tekrar olurdu).
+            // TODO: LLM eklenince cevap metniyle appendMessage(.assistant, reply).
             await postResponseListen()
         } catch {
             mark("Cihaz TTS hatası: \(error.localizedDescription)")

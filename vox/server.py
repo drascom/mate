@@ -9,7 +9,7 @@ mate-ios bu sözleşmeyi konuşur (APIClient.swift):
 
 Çalıştır:
     source .venv/bin/activate
-    uvicorn server:app --host 0.0.0.0 --port 8080
+    uvicorn server:app --host 0.0.0.0 --port 8808
     # veya:  python server.py
 
 Ortam değişkenleri:
@@ -486,5 +486,5 @@ def warmup():
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("VOX_PORT", "8080"))
+    port = int(os.environ.get("VOX_PORT", "8808"))
     uvicorn.run("server:app", host="0.0.0.0", port=port, workers=1)

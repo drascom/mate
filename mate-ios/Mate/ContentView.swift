@@ -41,6 +41,22 @@ struct ContentView: View {
             .padding(.top, 8)
         }
         .animation(.easeInOut, value: conversation.modelLoading)
+        .overlay(alignment: .top) {
+            if conversation.serverConnected == false && conversation.isRunning && !settings.useOnDeviceTTS {
+                HStack(spacing: 8) {
+                    Image(systemName: "wifi.exclamationmark")
+                    Text("Sunucu bağlantısı yok")
+                        .font(.footnote.weight(.medium))
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(.red.opacity(0.85), in: Capsule())
+                .padding(.top, 12)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut, value: conversation.serverConnected)
         .sheet(isPresented: $showSettings) {
             SettingsView()
                 .environmentObject(settings)
@@ -137,7 +153,9 @@ struct ContentView: View {
 
     /// Seçili STT motoru rozeti (Whisper / Apple). settings.useWhisperSTT'i yansıtır.
     private var sttBadge: some View {
-        let isWhisper = settings.useWhisperSTT
+        // Gerçekte aktif motor: Whisper SEÇİLİ ve model HAZIR ise Whisper; model
+        // inerken/hazır değilken SFSpeech (Apple) kullanıldığı için "Apple" göster.
+        let isWhisper = settings.useWhisperSTT && conversation.whisperReady
         return HStack(spacing: 4) {
             Image(systemName: isWhisper ? "waveform" : "apple.logo")
                 .font(.system(size: 10, weight: .semibold))

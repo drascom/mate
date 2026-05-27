@@ -25,5 +25,5 @@ echo "==> VPS'te kurulum + servis (remote_setup.sh)"
 ssh "$HOST" "cd $DEST && bash remote_setup.sh"
 
 echo "==> Bitti. Sağlık kontrolü:"
-ssh "$HOST" "curl -s http://127.0.0.1:8080/health || true"
+ssh "$HOST" "curl -s http://127.0.0.1:8808/health || true"
 echo

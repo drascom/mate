@@ -53,7 +53,7 @@ struct SettingsView: View {
                 }
 
                 Section("Realtime Bridge (WebSocket TTS)") {
-                    TextField("ws://192.168.0.183:8643/ws", text: $draftBridgeWSURL)
+                    TextField("ws://192.168.0.150:8808/ws", text: $draftBridgeWSURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
@@ -184,7 +184,7 @@ struct SettingsView: View {
 
     /// `ws://host:port/ws` gibi bir WebSocket URL'inden HTTP base türetir:
     /// şema ws→http / wss→https'e çevrilir, path ve query atılır.
-    /// Örn: `ws://192.168.0.150:8080/ws` → `http://192.168.0.150:8080`
+    /// Örn: `ws://192.168.0.150:8808/ws` → `http://192.168.0.150:8808`
     private func httpBase(fromWS wsURL: String) -> String? {
         let trimmed = wsURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty,
