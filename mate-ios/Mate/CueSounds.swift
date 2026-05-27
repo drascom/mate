@@ -31,6 +31,12 @@ final class CueSounds {
     }
 
     /// Wake duyuldu → "dinliyorum" — yükselen iki ton
+    /// Wake kelimesi algılandı → "duydum" — kısa tek ton (onay).
+    func playWakeAck() {
+        play(notes: [(620, 0.07, 0.0)])
+    }
+
+    /// Isınma bitti → "konuş" — yükselen iki ton.
     func playWakeDetected() {
         play(notes: [(660, 0.08, 0.0), (880, 0.10, 0.005)])
     }

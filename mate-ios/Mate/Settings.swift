@@ -16,6 +16,10 @@ final class SettingsStore: ObservableObject {
     // Cihaz TTS yedek/override: açıkken bridge atlanır, doğrudan AVSpeechSynthesizer kullanılır.
     @Published var useOnDeviceTTS: Bool { didSet { defaults.set(useOnDeviceTTS, forKey: "useOnDeviceTTS") } }
     @Published var onDeviceVoiceId: String { didSet { defaults.set(onDeviceVoiceId, forKey: "onDeviceVoiceId") } }
+    // STT motoru: true → WhisperKit (cihaz-içi, Türkçe iyi, model iner),
+    // false → Apple SFSpeech (anında, internetsiz, Türkçe zayıf). Apple seçiliyse
+    // Whisper modeli HİÇ indirilmez.
+    @Published var useWhisperSTT: Bool { didSet { defaults.set(useWhisperSTT, forKey: "useWhisperSTT") } }
     // Realtime bridge (WebSocket TTS): STT cihazda yapılır, tanınan metin WS ile
     // bridge'e gönderilir, gelen pcm_f32le parçaları gerçek zamanlı çalınır.
     @Published var bridgeWSURL: String { didSet { defaults.set(bridgeWSURL, forKey: "bridgeWSURL") } }
@@ -31,6 +35,7 @@ final class SettingsStore: ObservableObject {
         self.bargeInEnabled = defaults.object(forKey: "bargeInEnabled") as? Bool ?? true
         self.useOnDeviceTTS = defaults.object(forKey: "useOnDeviceTTS") as? Bool ?? false
         self.onDeviceVoiceId = defaults.string(forKey: "onDeviceVoiceId") ?? ""
+        self.useWhisperSTT = defaults.object(forKey: "useWhisperSTT") as? Bool ?? true
         self.bridgeWSURL = defaults.string(forKey: "bridgeWSURL") ?? "ws://192.168.0.183:8643/ws"
     }
 }

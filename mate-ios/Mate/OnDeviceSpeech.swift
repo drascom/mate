@@ -10,26 +10,51 @@ import WhisperKit
 /// tamamen cihazda çalışır — Apple buluta ses GİTMEZ.
 actor WhisperSTT {
     static let shared = WhisperSTT()
+    /// Model yüklendi mi — transcribe'ın inme sırasında BLOKLAMAMASI için hızlı (senkron) kontrol.
+    /// İnerken false → SFSpeech kullanılır; hazır olunca true → WhisperKit'e geçilir.
+    static var modelReady = false
 
-    private let modelName = "openai_whisper-small"
+    private let modelName = "openai_whisper-large-v3-v20240930_turbo_632MB"
     private var whisperKit: WhisperKit?
     private var loadTask: Task<WhisperKit, Error>?
+    /// İndirme ilerlemesini (0.0–1.0) UI'a bildiren callback. prewarm(progress:)
+    /// ile set edilir; download progressCallback'ten (fractionCompleted) beslenir.
+    /// MainActor'a marshal edilerek çağrılır.
+    private var progressHandler: (@Sendable (Double) -> Void)?
 
     /// Modeli LAZY ve BİR KEZ yükle. Eşzamanlı çağrılar aynı load Task'i bekler.
     /// İlk transcribe model inene kadar bloklar — kabul (loglanır).
+    /// İki aşama: (1) WhisperKit.download(progressCallback:) ile indir (yüzde),
+    /// (2) inen klasörden WhisperKit(modelFolder:) ile yükle.
     private func instance() async throws -> WhisperKit {
         if let whisperKit { return whisperKit }
         if let loadTask { return try await loadTask.value }
         let model = modelName
+        let handler = progressHandler
         let task = Task { () throws -> WhisperKit in
             let base = Self.modelsDirectory()
-            print("[Whisper] model yükleniyor (\(model)) → kalıcı konum: \(base.path)")
+            print("[Whisper] model indiriliyor (\(model)) → kalıcı konum: \(base.path)")
+            // (1) İndir — fractionCompleted'i UI callback'ine taşı (MainActor'a marshal).
+            let folder = try await WhisperKit.download(
+                variant: model,
+                downloadBase: base,   // Application Support — iOS temizlemez; bir kez iner, bir daha inmez
+                progressCallback: { progress in
+                    if let handler {
+                        let p = progress.fractionCompleted
+                        Task { @MainActor in handler(p) }
+                    }
+                }
+            )
+            print("[Whisper] model indi, yükleniyor → \(folder.path)")
+            // İndirme bitti → UI'da %100 göster (yüklenirken "hazırlanıyor").
+            if let handler { Task { @MainActor in handler(1.0) } }
+            // (2) İnen klasörden yükle (yeniden indirme yok).
             let config = WhisperKitConfig(
                 model: model,
-                downloadBase: base,   // Application Support — iOS temizlemez; bir kez iner, bir daha inmez
+                modelFolder: folder.path,
                 prewarm: true,
                 load: true,
-                download: true
+                download: false
             )
             let kit = try await WhisperKit(config)
             print("[Whisper] model hazır (\(model))")
@@ -39,6 +64,7 @@ actor WhisperSTT {
         do {
             let kit = try await task.value
             whisperKit = kit
+            Self.modelReady = true
             loadTask = nil
             return kit
         } catch {
@@ -69,8 +95,12 @@ actor WhisperSTT {
     }
 
     /// Açılışta arka planda modeli indir/yükle (prewarm) — ilk konuşma beklemesin.
-    func prewarm() async {
+    /// `progress` callback'i indirme ilerlemesini (0.0–1.0) bildirir; MainActor'a
+    /// marshal edilerek çağrılır.
+    func prewarm(progress: (@Sendable (Double) -> Void)? = nil) async {
+        progressHandler = progress
         _ = try? await instance()
+        progressHandler = nil
     }
 
     /// Modellerin kalıcı indirileceği konum: Application Support (iOS bunu temizlemez).
@@ -110,7 +140,10 @@ enum OnDeviceSTT {
 
     /// PRIMARY: WhisperKit; YEDEK: SFSpeech. İmza ConversationManager için AYNI.
     /// Whisper hata atar VEYA boş/whitespace dönerse SFSpeech yedek devreye girer.
-    static func transcribe(audioURL: URL, language: String) async throws -> String {
+    /// `useWhisper == false` → Apple SFSpeech motoru SADECE kullanılır (Whisper'a hiç
+    /// gidilmez, model inmez). `useWhisper == true` → mevcut mantık: model hazırsa
+    /// Whisper, değilse (iniyorsa) geçici SFSpeech.
+    static func transcribe(audioURL: URL, language: String, useWhisper: Bool = true) async throws -> String {
         // TANI: yakalanan dosyanın süresi — boş STT'nin sebebi capture (kısa/sessiz
         // dosya) mı yoksa recognition mı, ayırt etmek için. (Motordan bağımsız logla.)
         if let f = try? AVAudioFile(forReading: audioURL) {
@@ -121,19 +154,30 @@ enum OnDeviceSTT {
             print("[STT] file AÇILAMADI: \(audioURL.lastPathComponent)")
         }
 
-        // 1) PRIMARY: WhisperKit
-        do {
-            let text = try await WhisperSTT.shared.transcribe(audioURL: audioURL)
-            if !text.isEmpty {
-                print("[STT] engine=whisper final empty=false")
-                return text
-            }
-            print("[STT] engine=whisper boş döndü → sfspeech yedek")
-        } catch {
-            print("[STT] engine=whisper hata: \(error.localizedDescription) → sfspeech yedek")
+        // 0) Apple motoru seçiliyse Whisper'a HİÇ gitme — sadece SFSpeech.
+        if !useWhisper {
+            print("[STT] motor=apple (kullanıcı seçimi) → sfspeech")
+            return try await transcribeSFSpeech(audioURL: audioURL, language: language)
         }
 
-        // 2) YEDEK: SFSpeech
+        // 1) PRIMARY: WhisperKit — yalnız model HAZIR ise. Model iniyorsa BLOKLAMA;
+        // SFSpeech ile geçici devam (option 2). Model inince otomatik Whisper'a geçilir.
+        if WhisperSTT.modelReady {
+            do {
+                let text = try await WhisperSTT.shared.transcribe(audioURL: audioURL)
+                if !text.isEmpty {
+                    print("[STT] engine=whisper final empty=false")
+                    return text
+                }
+                print("[STT] engine=whisper boş döndü → sfspeech yedek")
+            } catch {
+                print("[STT] engine=whisper hata: \(error.localizedDescription) → sfspeech yedek")
+            }
+        } else {
+            print("[STT] whisper modeli henüz hazır değil (iniyor) → sfspeech (geçici)")
+        }
+
+        // 2) SFSpeech (model inene kadar geçici, veya whisper boş/hata yedeği)
         return try await transcribeSFSpeech(audioURL: audioURL, language: language)
     }
 

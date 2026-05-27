@@ -14,8 +14,8 @@ struct MateApp: App {
                 .onAppear {
                     conversation.attach(settings: settings)
                     conversation.start()
-                    // WhisperKit modelini açılışta arka planda indir/yükle (prewarm).
-                    // Bu sürede UI'da "model hazırlanıyor" göstergesi çıkar.
+                    // Modeli arka planda indir/yükle. İnerken SFSpeech kullanılır (bloklamaz),
+                    // hazır olunca otomatik WhisperKit'e geçilir. Banner durumu gösterir.
                     conversation.prewarmModel()
                 }
         }

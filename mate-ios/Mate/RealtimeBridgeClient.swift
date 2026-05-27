@@ -44,6 +44,11 @@ final class RealtimeBridgeClient: NSObject {
     // audio_start ile gelen aktif format (binary parçaları çevirmek için).
     private var activeId: String?
     private var activeFormat: AVAudioFormat?
+    // Boşta bağlantı düşmesin diye periyodik ping (keepalive).
+    private var keepAliveTask: Task<Void, Never>?
+    // Kalıcı oturum: bağlı olduğumuz adres + oturumun açık kalması isteniyor mu.
+    private var currentURL: URL?
+    private var shouldStayConnected = false
 
     override init() {
         let cfg = URLSessionConfiguration.default
@@ -68,22 +73,57 @@ final class RealtimeBridgeClient: NSObject {
         }
         guard let url = components.url else { throw BridgeError.badURL }
 
-        disconnect(reason: "reconnect")
+        // Zaten aynı adrese bağlıysak yeni oturum AÇMA — her konuşmada reconnect olmasın.
+        if isConnected, currentURL == url { return }
+        currentURL = url
+        shouldStayConnected = true
+        openConnection(url)
+    }
+
+    private func openConnection(_ url: URL) {
+        task?.cancel(with: .goingAway, reason: "reconnect".data(using: .utf8))
         let task = session.webSocketTask(with: url)
         self.task = task
         isConnected = true
         task.resume()
         receiveLoop()
-        print("[Bridge] connecting to \(url.absoluteString)")
+        startKeepAlive()
+        print("[Bridge] connected: \(url.absoluteString)")
     }
 
     func disconnect(reason: String = "client") {
+        shouldStayConnected = false          // kasıtlı kapatma → otomatik yeniden bağlanma yok
+        keepAliveTask?.cancel()
+        keepAliveTask = nil
         guard task != nil else { return }
         task?.cancel(with: .goingAway, reason: reason.data(using: .utf8))
         task = nil
         isConnected = false
         activeId = nil
         activeFormat = nil
+    }
+
+    /// Boşta bağlantı düşmesini önlemek için her 10 sn'de bir ping gönder.
+    private func startKeepAlive() {
+        keepAliveTask?.cancel()
+        keepAliveTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 10_000_000_000)
+                guard let self, self.isConnected else { break }
+                try? await self.ping()
+            }
+        }
+    }
+
+    /// Beklenmedik kopmada oturumu canlı tut: kısa gecikmeyle yeniden bağlan.
+    /// (Kasıtlı disconnect'te shouldStayConnected=false olduğu için tetiklenmez.)
+    private func scheduleReconnect(_ url: URL) {
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            guard let self, self.shouldStayConnected, !self.isConnected else { return }
+            print("[Bridge] beklenmedik kopma → yeniden bağlanılıyor")
+            self.openConnection(url)
+        }
     }
 
     // MARK: - Client → Server
@@ -131,12 +171,17 @@ final class RealtimeBridgeClient: NSObject {
         guard let task else { return }
         task.receive { [weak self] result in
             Task { @MainActor in
-                guard let self else { return }
+                // Yalnız GÜNCEL task'ın callback'ini işle — superseded (yeniden bağlanma
+                // sırasında iptal edilen) eski soketin callback'i yeni oturumu bozmasın.
+                guard let self, self.task === task else { return }
                 switch result {
                 case .failure(let error):
                     self.isConnected = false
                     print("[Bridge] receive error: \(error.localizedDescription)")
                     self.onClose?(error.localizedDescription)
+                    if self.shouldStayConnected, let url = self.currentURL {
+                        self.scheduleReconnect(url)
+                    }
                 case .success(let message):
                     self.handle(message: message)
                     // Bir sonraki frame'i dinlemeye devam et.

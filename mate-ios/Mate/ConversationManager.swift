@@ -32,6 +32,8 @@ final class ConversationManager: ObservableObject {
     @Published private(set) var lastTranscript: String = ""
     @Published private(set) var diagnosticStatus: String = ""
     @Published private(set) var modelLoading: Bool = false
+    /// Whisper model indirme ilerlemesi (0.0–1.0). prewarmModel sırasında güncellenir.
+    @Published private(set) var modelProgress: Double = 0
     @Published var isRunning: Bool = false
     // SwiftUI nested ObservableObject re-render etmiyor; recorder.level ve
     // player.amplitude'ı buradan re-publish edip view'lar conversation'a
@@ -69,10 +71,11 @@ final class ConversationManager: ObservableObject {
     private var lastVoiceAt: Date?
     private var listeningLoopActive = false
     private let voiceThreshold: Float = 0.28          // baseline — adaptive when filter on
-    private let silenceTimeout: TimeInterval = 2.0   // konuşma-sonu sessizlik: kullanıcıya duraksama payı
+    private let silenceTimeout: TimeInterval = 1.2   // konuşma-sonu sessizlik (dengeli: boşlukta böler, kısa duraksamaya tolerans)
     private let maxRecordingDuration: TimeInterval = 30.0
     private let minSpeechDuration: TimeInterval = 0.9  // gerçek konuşma min süresi (kuş/klik/noise burst'lerine karşı)
     private let postPlaybackDelay: UInt64 = 200_000_000  // AEC aktif, TTS tail az → kısa delay
+    private let engineWarmupSeconds: Double = 0.9  // wake sonrası motor/VPIO soğuk başlangıç ısınması
     private let followUpInactivity: TimeInterval = 15.0
     private var turnStartedAt: Date?
 
@@ -167,6 +170,18 @@ final class ConversationManager: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] in self?.outputAmplitude = $0 }
             .store(in: &levelBridges)
+
+        // Kullanıcı runtime'da Apple→Whisper'a geçerse ve model henüz inmemişse
+        // indirmeyi başlat (banner çıksın). Whisper→Apple geçişinde bir şey indirme.
+        settings.$useWhisperSTT
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] useWhisper in
+                guard let self else { return }
+                if useWhisper && !WhisperSTT.modelReady {
+                    self.prewarmModel()
+                }
+            }
+            .store(in: &levelBridges)
     }
 
     func start() {
@@ -177,10 +192,19 @@ final class ConversationManager: ObservableObject {
 
     /// Açılışta WhisperKit modelini arka planda indir/yükle; bu sürede UI'da
     /// "model hazırlanıyor" göstergesi için modelLoading = true tutulur.
+    /// SADECE Whisper STT seçiliyse indir — Apple seçiliyse model HİÇ inmesin.
     func prewarmModel() {
+        // Apple STT seçiliyse model indirmeyi tamamen atla.
+        guard settings?.useWhisperSTT ?? true else { return }
+        // Zaten hazırsa veya iniyorsa tekrar başlatma.
+        guard !WhisperSTT.modelReady, !modelLoading else { return }
         Task {
             modelLoading = true
-            await WhisperSTT.shared.prewarm()
+            modelProgress = 0
+            await WhisperSTT.shared.prewarm(progress: { [weak self] p in
+                // prewarm callback'i zaten MainActor'a marshal ediyor.
+                Task { @MainActor in self?.modelProgress = p }
+            })
             modelLoading = false
         }
     }
@@ -379,6 +403,8 @@ final class ConversationManager: ObservableObject {
     private func handleWakeDetected() {
         guard isRunning else { return }
         print("[Wake] detected → switching to listening")
+        // Algılama anı bip'i ("duydum"). Isınma sonrası "konuş" bip'i ayrıca çalar.
+        playCue { cues.playWakeAck() }
         Task {
             // Önce kısa ortam kalibrasyonu yap, sonra bip çal. Böylece kullanıcı
             // bip'i duyunca konuşacağını bilir; kuş/fan gibi sesler de baseline'a girer.
@@ -408,6 +434,22 @@ final class ConversationManager: ObservableObject {
         do {
             if !recorder.isRecording {
                 try recorder.startMonitoring()
+            }
+            // Wake sonrası motor SOĞUK başlar (VPIO/AEC ~0.9s converge eder); bu sürede
+            // mikrofon düzgün yakalamaz. Isınma boyunca girişi yok say — kalibrasyon ve
+            // "konuş" bipi ısınma bitince (sıcak motorda) çalışır, kullanıcı bip'ten
+            // SONRA konuşunca ilk kelimeler yakalanır.
+            if playReadyCueAfterCalibration {
+                ignoreInputUntil = Date().addingTimeInterval(engineWarmupSeconds)
+                // "Konuş" bipini ısınma SONUNDA çal — kalibrasyondan bağımsız. (Önceden bip
+                // kalibrasyona bağlıydı; gürültü filtresi kapalıyken hiç çalmıyordu.)
+                readyCuePending = false
+                Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(engineWarmupSeconds * 1_000_000_000))
+                    guard let self, self.isRunning, self.state == .listening,
+                          self.speechStartedAt == nil else { return }
+                    self.playCue { self.cues.playWakeDetected() }
+                }
             }
             state = .listening
 
@@ -635,7 +677,8 @@ final class ConversationManager: ObservableObject {
         do {
             let text = try await OnDeviceSTT.transcribe(
                 audioURL: audio,
-                language: settings.language
+                language: settings.language,
+                useWhisper: settings.useWhisperSTT
             )
             trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         } catch {
@@ -674,6 +717,12 @@ final class ConversationManager: ObservableObject {
         let alphanumCount = lower.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }.count
         if alphanumCount < 4 { return true }
         if hallucinationPhrases.contains(lower) { return true }
+        // Whisper'ın sessiz/gürültülü seste uydurduğu altyazı/video artefaktları —
+        // metnin İÇİNDE geçiyorsa gürültü say (tam eşleşme "Altyazı M.K." gibi
+        // varyasyonları kaçırıyordu).
+        for marker in ["altyazı", "m.k.", "dipnot.com", "iyi seyirler"] where lower.contains(marker) {
+            return true
+        }
         if lower.contains("izlediğiniz için teşekkür") { return true }
         if lower.contains("dinlediğiniz için teşekkür") { return true }
         if lower.contains("abone ol") || lower.contains("abone olun") { return true }

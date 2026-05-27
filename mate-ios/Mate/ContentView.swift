@@ -37,7 +37,7 @@ struct ContentView: View {
             if conversation.modelLoading {
                 HStack(spacing: 10) {
                     ProgressView().tint(.white)
-                    Text("Ses modeli hazırlanıyor, lütfen bekleyin…\nİlk açılışta bir kez indiriliyor.")
+                    Text(modelBannerText)
                         .font(.footnote)
                         .foregroundStyle(.white)
                         .fixedSize(horizontal: false, vertical: true)
@@ -73,6 +73,15 @@ struct ContentView: View {
         } message: {
             Text(serverAlertMessage ?? "")
         }
+    }
+
+    /// İndirme banner metni: indirme sürerken yüzde, %100'de "hazırlanıyor".
+    private var modelBannerText: String {
+        let pct = Int((conversation.modelProgress * 100).rounded())
+        if pct >= 100 {
+            return "Gelişmiş ses modeli hazırlanıyor…\nBu sürede temel tanıma kullanılıyor."
+        }
+        return "Gelişmiş ses modeli iniyor… %\(pct)\nBu sürede temel tanıma kullanılıyor."
     }
 
     private var backgroundGradient: some View {

@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var draftNoiseFilter = true
     @State private var draftBargeIn = true
     @State private var draftUseOnDeviceTTS = false
+    @State private var draftUseWhisperSTT = true
     @State private var draftOnDeviceVoice = ""
     @State private var draftBridgeWSURL = ""
 
@@ -27,6 +28,15 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Ses Motoru") {
+                    Picker("STT Motoru", selection: $draftUseWhisperSTT) {
+                        Text("Whisper (turbo)").tag(true)
+                        Text("Apple").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                    Text("Whisper: cihaz-içi, Türkçe daha iyi (model iner). Apple: anında, internetsiz, Türkçe zayıf.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
                     Toggle("Cihaz TTS (AVSpeechSynthesizer)", isOn: $draftUseOnDeviceTTS)
                     if draftUseOnDeviceTTS {
                         Picker("Cihaz sesi", selection: $draftOnDeviceVoice) {
@@ -125,6 +135,7 @@ struct SettingsView: View {
                 draftNoiseFilter = settings.noiseFilterEnabled
                 draftBargeIn = settings.bargeInEnabled
                 draftUseOnDeviceTTS = settings.useOnDeviceTTS
+                draftUseWhisperSTT = settings.useWhisperSTT
                 draftOnDeviceVoice = settings.onDeviceVoiceId
                 draftBridgeWSURL = settings.bridgeWSURL
                 onDeviceVoices = OnDeviceTTS.availableVoices(language: settings.language)
@@ -225,6 +236,7 @@ struct SettingsView: View {
         settings.noiseFilterEnabled = draftNoiseFilter
         settings.bargeInEnabled = draftBargeIn
         settings.useOnDeviceTTS = draftUseOnDeviceTTS
+        settings.useWhisperSTT = draftUseWhisperSTT
         settings.onDeviceVoiceId = draftOnDeviceVoice.trimmingCharacters(in: .whitespacesAndNewlines)
         settings.bridgeWSURL = draftBridgeWSURL.trimmingCharacters(in: .whitespacesAndNewlines)
         dismiss()

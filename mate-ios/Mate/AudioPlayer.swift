@@ -355,15 +355,24 @@ final class AudioPlayer: NSObject, ObservableObject {
     }
 
     /// Stream tamamen çalınana (audio_end + tüm parçalar duyuldu) kadar bekle.
+    /// Güvenlik: yanıt gelmezse (WS koptu / audio_end gelmedi) sonsuza dek
+    /// "Konuşuyorum"da asılma — zaman aşımıyla çık.
     func waitForPCMStreamDrained() async {
-        if streamFinishedFlag && streamPending <= 0 {
-            isPlaying = false
-            stopAmplitudeMetering()
-            return
+        let start = Date()
+        while !(streamFinishedFlag && streamPending <= 0) {
+            if !isPlaying { break }                  // stopPCMStream çağrıldı
+            let elapsed = Date().timeIntervalSince(start)
+            if !streamStarted && elapsed > 6 {       // 6 sn'de hiç ses parçası gelmedi → yanıt yok
+                print("[Player] yanıt gelmedi (6s) — tur bitiriliyor")
+                break
+            }
+            if elapsed > 30 {                         // mutlak güvenlik üst sınırı
+                print("[Player] drain timeout (30s) — tur bitiriliyor")
+                break
+            }
+            try? await Task.sleep(nanoseconds: 100_000_000)
         }
-        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
-            self.streamDrainYield = { cont.resume() }
-        }
+        streamDrainYield = nil
         isPlaying = false
         stopAmplitudeMetering()
     }
