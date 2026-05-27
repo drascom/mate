@@ -33,7 +33,7 @@ struct SettingsView: View {
                         Text("Apple").tag(false)
                     }
                     .pickerStyle(.segmented)
-                    Text("Whisper: cihaz-içi, Türkçe daha iyi (model iner). Apple: anında, internetsiz, Türkçe zayıf.")
+                    Text("Whisper Türkçe'de daha iyi (model iner), Apple ise anında ve internetsiz çalışır.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -47,7 +47,7 @@ struct SettingsView: View {
                         }
                         .pickerStyle(.menu)
                     }
-                    Text("Cihaz STT (Apple Speech) her zaman açıktır — ses tanıma tamamen iPhone üzerinde çalışır. Cihaz TTS açıkken ses sentezi de cihazda yapılır ve realtime bridge atlanır; kapalıyken bridge kullanılır, bridge erişilemezse otomatik cihaz TTS'e düşülür.")
+                    Text("Açıkken ses sentezi cihazda yapılır; kapalıyken bridge kullanılır, erişilemezse cihaza düşülür.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -71,7 +71,7 @@ struct SettingsView: View {
 
                     SecureField("Bridge token", text: $draftBridgeKey)
 
-                    Text("STT cihazda yapılır, tanınan metin WebSocket ile bridge'e gönderilir, dönen ham ses (pcm_f32le) parça parça gerçek zamanlı çalınır. Token boş bırakılabilir.")
+                    Text("Tanınan metin bridge'e gönderilir, dönen ses gerçek zamanlı çalınır (token boş bırakılabilir).")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -82,28 +82,28 @@ struct SettingsView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .disabled(!draftWakeEnabled)
-                    Text("Açıkken: cihaz \"\(draftWakeWord.isEmpty ? "—" : draftWakeWord)\" duyana kadar bekler, sonra konuşmayı kaydedip işler. Cevaptan sonra 15 sn ses gelmezse tekrar wake'e döner.\nKapalıyken: sürekli dinler.")
+                    Text("Açıkken \"\(draftWakeWord.isEmpty ? "—" : draftWakeWord)\" duyulana kadar bekler; kapalıyken sürekli dinler.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Section("Geçiş Sesleri") {
                     Toggle("Bip sesleri", isOn: $draftCuesEnabled)
-                    Text("Wake duyulduğunda yükselen, konuşma bittiğinde tek, uyku moduna geçişte inen yumuşak ton çalar.")
+                    Text("Wake, konuşma sonu ve uyku geçişlerinde kısa yumuşak tonlar çalar.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Section("Gürültü Filtresi") {
                     Toggle("Adaptif gürültü filtresi", isOn: $draftNoiseFilter)
-                    Text("Açıkken: kayıt başında 300ms ortam sesini ölçer (fan, klima vb.), VAD eşiğini ona göre yukarı çeker. Ek olarak 150ms ardışık konuşma frame'i gerekir — kısa tıklama/spike'lar tetiklemez.\nKapalıyken: sabit eşik (0.28) kullanılır.")
+                    Text("Açıkken ortam sesine göre eşiği uyarlar; kapalıyken sabit eşik kullanır.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 Section("Sözünü Kes (Barge-in)") {
                     Toggle("Konuşurken müdahaleye izin ver", isOn: $draftBargeIn)
-                    Text("Açıkken: ajan konuşurken sen konuşmaya başlarsan TTS hemen durur, sana döner. İlk 300ms'de speaker echo seviyesi ölçülür, eşik buna göre belirlenir.\nKapalıyken: ajan sözünü bitirene kadar bekler.")
+                    Text("Açıkken konuşmaya başladığında ajan susup sana döner; kapalıyken sözünü bitirir.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

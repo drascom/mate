@@ -11,22 +11,22 @@ struct ContentView: View {
             backgroundGradient
                 .ignoresSafeArea()
 
-            VStack(spacing: 24) {
+            VStack(spacing: 0) {
                 topBar
 
-                Spacer()
+                Spacer(minLength: 12)
 
                 centerVisual
                     .frame(height: 280)
 
                 statusText
+                    .frame(height: 56)          // sabit → state değişince kaymaz
 
-                Spacer()
+                Spacer(minLength: 12)
 
-                if !conversation.lastTranscript.isEmpty {
-                    transcriptCard
-                        .padding(.horizontal, 20)
-                }
+                transcriptSlot
+                    .frame(height: 82)          // sabit slot (biraz kısaltıldı — üstten)
+                    .padding(.bottom, 18)       // play/pause butonundan boşluk (alttan yukarı)
 
                 controlBar
                     .padding(.bottom, 20)
@@ -124,13 +124,13 @@ struct ContentView: View {
         switch conversation.state {
         case .listening:
             BarsView(level: conversation.inputLevel)
-                .transition(.opacity.combined(with: .scale))
+                .transition(.opacity)
         case .speaking:
             OrbView(amplitude: conversation.outputAmplitude, hue: 0.78, pulsing: true)
-                .transition(.opacity.combined(with: .scale))
+                .transition(.opacity)
         case .transcribing, .synthesizing:
             OrbView(amplitude: 0.15, hue: 0.55, pulsing: true)
-                .transition(.opacity.combined(with: .scale))
+                .transition(.opacity)
         case .waitingForWake:
             OrbView(amplitude: 0, hue: 0.42, pulsing: true)
                 .opacity(0.55)
@@ -143,40 +143,80 @@ struct ContentView: View {
     }
 
     private var statusText: some View {
+        // Ana satır (state.label) + ince, SABİT yükseklikli per-state alt başlık.
+        // Ham diagnosticStatus burada GÖSTERİLMEZ (yalnız log/print için set ediliyor).
         VStack(spacing: 4) {
             Text(conversation.state.label)
                 .font(.system(size: 16, weight: .medium, design: .rounded))
                 .foregroundStyle(.white.opacity(0.75))
-            if conversation.state == .waitingForWake, !settings.wakeWord.isEmpty {
-                Text("\"\(settings.wakeWord)\" de")
-                    .font(.system(size: 13, weight: .regular, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-            if !conversation.diagnosticStatus.isEmpty {
-                Text(conversation.diagnosticStatus)
-                    .font(.system(size: 12, weight: .regular, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.48))
-                    .multilineTextAlignment(.center)
-                    .lineLimit(2)
-                    .padding(.horizontal, 20)
-            }
+            Text(stateSubtitle)
+                .font(.system(size: 13, weight: .regular, design: .rounded))
+                .foregroundStyle(.white.opacity(0.45))
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .frame(height: 18)   // sabit → alt başlık boşken bile yükseklik değişmez
         }
         .animation(.easeInOut, value: conversation.state)
     }
 
-    private var transcriptCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Sen dedin ki")
-                .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
-            Text(conversation.lastTranscript)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(.white.opacity(0.9))
-                .lineLimit(3)
+    /// State'e uygun temiz alt başlık. waitingForWake'te wake kelime ipucu üretir.
+    private var stateSubtitle: String {
+        if conversation.state == .waitingForWake {
+            return settings.wakeWord.isEmpty ? "Wake kelimesini söyle" : "\"\(settings.wakeWord)\" de"
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        return conversation.state.subtitle
+    }
+
+    /// Sohbet akışı: user/assistant satırları alternatif, en yeni ALTTA, eskiler
+    /// yukarı kayar. Sabit yükseklikli alan; yeni satırda slide+opacity animasyonu.
+    private var transcriptSlot: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 6) {
+                    ForEach(conversation.messages) { message in
+                        chatRow(message)
+                            .id(message.id)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, 20)
+                .frame(maxWidth: .infinity, alignment: .bottom)
+                .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            .frame(maxWidth: .infinity)
+            .animation(.easeOut(duration: 0.25), value: conversation.messages.count)
+            .onChange(of: conversation.messages.count) { _ in
+                if let last = conversation.messages.last {
+                    withAnimation(.easeOut(duration: 0.25)) {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func chatRow(_ message: ChatMessage) -> some View {
+        let isUser = message.role == .user
+        HStack {
+            if isUser { Spacer(minLength: 40) }
+            Text(message.text)
+                .font(.system(size: 14, weight: .regular, design: .rounded))
+                .foregroundStyle(isUser ? Color.white.opacity(0.92) : Color(hue: 0.62, saturation: 0.35, brightness: 1.0))
+                .multilineTextAlignment(isUser ? .trailing : .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    .ultraThinMaterial,
+                    in: RoundedRectangle(cornerRadius: 14)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color.white.opacity(isUser ? 0.10 : 0.04), lineWidth: 1)
+                )
+            if !isUser { Spacer(minLength: 40) }
+        }
+        .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
     }
 
     private var controlBar: some View {

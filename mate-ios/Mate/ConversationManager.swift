@@ -24,12 +24,38 @@ enum ConversationState: Equatable {
         case .error(let msg): return "Hata: \(msg)"
         }
     }
+
+    /// State'e uygun temiz, kısa alt başlık (UI'da `label`'ın altında gösterilir).
+    /// Ham diagnosticStatus yerine kullanıcı dostu metin. waitingForWake için
+    /// metin ContentView'de wake kelimesiyle birleştirilir, burada boş döner.
+    var subtitle: String {
+        switch self {
+        case .idle: return "Başlat'a bas"
+        case .waitingPermission: return "İzinler bekleniyor"
+        case .waitingForWake: return ""
+        case .listening: return "Seni dinliyorum…"
+        case .transcribing: return "Anlıyorum…"
+        case .synthesizing: return "Yanıt hazırlanıyor…"
+        case .speaking: return "Konuşuyorum…"
+        case .error: return ""
+        }
+    }
+}
+
+/// Sohbet feed'inde gösterilen tek bir konuşma satırı.
+struct ChatMessage: Identifiable {
+    let id = UUID()
+    enum Role { case user, assistant }
+    let role: Role
+    let text: String
 }
 
 @MainActor
 final class ConversationManager: ObservableObject {
     @Published private(set) var state: ConversationState = .idle
     @Published private(set) var lastTranscript: String = ""
+    /// Sohbet feed'i: user/assistant satırları, en yeni sonda. Son ~20 tutulur.
+    @Published private(set) var messages: [ChatMessage] = []
     @Published private(set) var diagnosticStatus: String = ""
     @Published private(set) var modelLoading: Bool = false
     /// Whisper model indirme ilerlemesi (0.0–1.0). prewarmModel sırasında güncellenir.
@@ -299,6 +325,16 @@ final class ConversationManager: ObservableObject {
         realtimeActiveId = nil
         state = .idle
         diagnosticStatus = ""
+    }
+
+    /// Sohbet feed'ine bir satır ekler; en fazla son 20 mesajı tutar.
+    private func appendMessage(_ role: ChatMessage.Role, _ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        messages.append(ChatMessage(role: role, text: trimmed))
+        if messages.count > 20 {
+            messages.removeFirst(messages.count - 20)
+        }
     }
 
     private func mark(_ message: String) {
@@ -754,6 +790,9 @@ final class ConversationManager: ObservableObject {
     /// Cihaz TTS override açıksa ya da bridge bağlantı/speak başarısız olursa
     /// synthesizeAndPlayOnDevice ile cihaz-içi TTS'e düşülür (yedek).
     private func speakViaRealtime(text: String, settings: SettingsStore) async {
+        // Tanınan (gönderilen) metni sohbet feed'ine kullanıcı satırı olarak ekle.
+        appendMessage(.user, text)
+
         // Override: kullanıcı cihaz TTS'i tercih ettiyse bridge'i tamamen atla.
         if settings.useOnDeviceTTS {
             await synthesizeAndPlayOnDevice(text: text, settings: settings)
@@ -817,6 +856,10 @@ final class ConversationManager: ObservableObject {
 
         try? await Task.sleep(nanoseconds: postPlaybackDelay)
         mark("Tur tamamlandı (realtime bridge)")
+        // ECHO: sunucu şu an SADECE ses döndürüyor, cevap METNİ yok → assistant
+        // satırı = gönderilen user metniyle AYNI (echo). TODO: LLM eklenince bridge
+        // cevap metnini gönderecek; assistant satırı oradan gelecek.
+        appendMessage(.assistant, text)
         // TTS sonrası ~0.6 sn yankı yatışması: kendi sesinin kuyruğu boş segment açmasın.
         await postResponseListen(echoSettle: 0.6)
     }
@@ -857,6 +900,9 @@ final class ConversationManager: ObservableObject {
 
             try? await Task.sleep(nanoseconds: postPlaybackDelay)
             mark("Tur tamamlandı (cihaz TTS)")
+            // ECHO: cevap metni yok → assistant satırı = user metni (echo).
+            // TODO: LLM eklenince bridge cevap metnini gönderecek.
+            appendMessage(.assistant, text)
             await postResponseListen()
         } catch {
             mark("Cihaz TTS hatası: \(error.localizedDescription)")
