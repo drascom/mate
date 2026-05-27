@@ -1,5 +1,5 @@
 import Foundation
-import AVFoundation
+@preconcurrency import AVFoundation
 
 /// AudioPipeline (voice-processing'li shared engine) üzerinden TTS çalan facade.
 /// AVAudioPlayer yerine AVAudioPlayerNode kullanır → playback aynı engine'den

@@ -30,14 +30,12 @@ enum ConversationState: Equatable {
     /// metin ContentView'de wake kelimesiyle birleştirilir, burada boş döner.
     var subtitle: String {
         switch self {
-        case .idle: return "Başlat'a bas"
-        case .waitingPermission: return "İzinler bekleniyor"
-        case .waitingForWake: return ""
-        case .listening: return "Seni dinliyorum…"
-        case .transcribing: return "Anlıyorum…"
-        case .synthesizing: return "Yanıt hazırlanıyor…"
-        case .speaking: return "Konuşuyorum…"
-        case .error: return ""
+        case .idle: return "Başlat'a bas"               // eylem ipucu
+        case .listening: return "konuşabilirsin"        // ipucu (label'ı tekrar etmez)
+        case .waitingForWake: return ""                 // ContentView wake kelime ipucunu üretir
+        case .speaking: return ""                       // ContentView barge-in ipucunu üretir
+        case .waitingPermission, .transcribing, .synthesizing, .error:
+            return ""
         }
     }
 }
@@ -439,8 +437,8 @@ final class ConversationManager: ObservableObject {
     private func handleWakeDetected() {
         guard isRunning else { return }
         print("[Wake] detected → switching to listening")
-        // Algılama anı bip'i ("duydum"). Isınma sonrası "konuş" bip'i ayrıca çalar.
-        playCue { cues.playWakeAck() }
+        // Tek bip: ısınma bitince "konuş" bip'i (beginListening içinde) çalar.
+        // Algılama anında ayrı bip YOK.
         Task {
             // Önce kısa ortam kalibrasyonu yap, sonra bip çal. Böylece kullanıcı
             // bip'i duyunca konuşacağını bilir; kuş/fan gibi sesler de baseline'a girer.

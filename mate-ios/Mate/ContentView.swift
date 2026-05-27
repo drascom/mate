@@ -28,26 +28,17 @@ struct ContentView: View {
                     .frame(height: 82)          // sabit slot (biraz kısaltıldı — üstten)
                     .padding(.bottom, 18)       // play/pause butonundan boşluk (alttan yukarı)
 
+                if conversation.modelLoading {
+                    modelLoadingBanner
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 12)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
                 controlBar
                     .padding(.bottom, 20)
             }
             .padding(.top, 8)
-        }
-        .overlay(alignment: .top) {
-            if conversation.modelLoading {
-                HStack(spacing: 10) {
-                    ProgressView().tint(.white)
-                    Text(modelBannerText)
-                        .font(.footnote)
-                        .foregroundStyle(.white)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial, in: Capsule())
-                .padding(.top, 12)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
         }
         .animation(.easeInOut, value: conversation.modelLoading)
         .sheet(isPresented: $showSettings) {
@@ -84,6 +75,30 @@ struct ContentView: View {
         return "Gelişmiş ses modeli iniyor… %\(pct)\nBu sürede temel tanıma kullanılıyor."
     }
 
+    /// Model indirme/hazırlama göstergesi — Başlat butonunun üstünde.
+    /// İndirme sırasında çizgi progress bar; prewarm sırasında belirsiz spinner.
+    private var modelLoadingBanner: some View {
+        VStack(spacing: 8) {
+            Text(modelBannerText)
+                .font(.caption)
+                .foregroundStyle(.white.opacity(0.85))
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if conversation.modelProgress < 1.0 {
+                ProgressView(value: conversation.modelProgress)   // indirme: çizgi bar
+                    .tint(.white)
+            } else {
+                ProgressView()                                    // prewarm: belirsiz spinner
+                    .tint(.white)
+                    .controlSize(.small)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+    }
+
     private var backgroundGradient: some View {
         LinearGradient(
             colors: [
@@ -101,6 +116,7 @@ struct ContentView: View {
             Text("Mate.")
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundStyle(.white.opacity(0.9))
+            sttBadge
             Spacer()
             RoutePickerView()
                 .frame(width: 28, height: 28)
@@ -117,6 +133,21 @@ struct ContentView: View {
             }
         }
         .padding(.horizontal, 20)
+    }
+
+    /// Seçili STT motoru rozeti (Whisper / Apple). settings.useWhisperSTT'i yansıtır.
+    private var sttBadge: some View {
+        let isWhisper = settings.useWhisperSTT
+        return HStack(spacing: 4) {
+            Image(systemName: isWhisper ? "waveform" : "apple.logo")
+                .font(.system(size: 10, weight: .semibold))
+            Text(isWhisper ? "Whisper" : "Apple")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+        }
+        .foregroundStyle(.white.opacity(0.7))
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(.ultraThinMaterial, in: Capsule())
     }
 
     @ViewBuilder
@@ -161,10 +192,14 @@ struct ContentView: View {
 
     /// State'e uygun temiz alt başlık. waitingForWake'te wake kelime ipucu üretir.
     private var stateSubtitle: String {
-        if conversation.state == .waitingForWake {
+        switch conversation.state {
+        case .waitingForWake:
             return settings.wakeWord.isEmpty ? "Wake kelimesini söyle" : "\"\(settings.wakeWord)\" de"
+        case .speaking:
+            return settings.bargeInEnabled ? "araya girip durdurabilirsin" : ""
+        default:
+            return conversation.state.subtitle
         }
-        return conversation.state.subtitle
     }
 
     /// Sohbet akışı: user/assistant satırları alternatif, en yeni ALTTA, eskiler
