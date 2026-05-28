@@ -3,10 +3,10 @@
 Sesli asistan. iPhone konuşmayı **cihazda** metne çevirir, metni WebSocket ile sunucuya yollar; sunucu metni **VoxCPM2** ile seslendirip sesi gerçek zamanlı geri akıtır. Ses sunucuya gitmez, sadece metin gider.
 
 ```
-iPhone (mate-ios)                         VPS (vox, RTX 3090)
- wake word → cihaz-içi STT (Apple / Whisper)
- ses → METİN  ───────────  ws://IP:8808/ws  ──────────►  VoxCPM2 TTS
- hoparlör ◄── pcm ses akışı ◄──────────────────────────  (gerçek zamanlı)
+iPhone (mate-ios)                  NPM (TLS)                 VPS (vox, RTX 3090)
+ wake → cihaz-içi STT (Apple/Whisper)
+ ses → METİN ── wss://domain/ws ──►  reverse proxy  ── ws://IP:8808/ws ──►  VoxCPM2 TTS
+ hoparlör ◄── pcm ses akışı ◄──────────────────────────────────────────────  (gerçek zamanlı)
 ```
 
 > Şu an "echo": sunucu gelen metni aynen seslendirir. İleride araya LLM girecek (STT → LLM → cevap → TTS).
@@ -43,10 +43,19 @@ cd mate-ios && xcodegen generate && open Mate.xcodeproj   # ⌘R ile cihaza yük
 ```
 Uygulamada **Ayarlar → "Realtime Bridge (WebSocket TTS)"** bölümüne sunucu adresini gir:
 ```
-ws://SUNUCU_IP:8808/ws        # örn: ws://192.168.0.150:8808/ws
+wss://DOMAIN/ws               # public (önerilen): wss://mate.drascom.uk/ws
+ws://SUNUCU_IP:8808/ws        # LAN geliştirme: ws://192.168.0.150:8808/ws
 ```
 - Ses seçimi: aynı bölümdeki picker sunucunun `/v1/voices` listesini çeker.
 - Auth açıksa (sunucuda `VOX_API_KEY`) token alanını doldur; yoksa boş bırak.
+- iOS ATS strict — `wss://` zorunlu. LAN `ws://` için Info.plist'te `NSAllowsLocalNetworking=true` açık bırakıldı.
+
+### Public erişim (NPM reverse proxy)
+Vox sunucusunu doğrudan internete açmak yerine bir reverse proxy (örn. Nginx Proxy Manager) TLS sonlandırır ve `wss://domain/ws` → `ws://VPS:8808/ws` proxy'ler:
+- DNS A kaydı → router/firewall public IP
+- NPM Proxy Host: hedef `VPS:8808`, **Websockets Support: AÇIK**, Let's Encrypt cert
+- Stream'ler için Advanced: `proxy_read_timeout 3600s; proxy_buffering off;`
+- VPS portu (`8808`) public'e **forward edilmez** — NPM LAN üzerinden ulaşır
 
 ### STT motoru seçimi (Ayarlar → "Ses Motoru")
 Konuşma tanıma tamamen cihazda; iki motordan biri seçilir:

@@ -62,7 +62,7 @@ struct SettingsView: View {
                 }
 
                 Section("Realtime Bridge (WebSocket TTS)") {
-                    TextField("ws://192.168.0.150:8808/ws", text: $draftBridgeWSURL)
+                    TextField("wss://mate.drascom.uk/ws", text: $draftBridgeWSURL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)

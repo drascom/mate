@@ -22,7 +22,7 @@ targets:
       path: Mate/Info.plist
       properties:
         CFBundleShortVersionString: "1.0"
-        CFBundleVersion: "1"
+        CFBundleVersion: "2"
         # Yalnız standart iOS HTTPS/TLS kullanılıyor (özel kripto yok) → export
         # compliance muaf; App Store Connect'te şifreleme sorusu sorulmaz.
         ITSAppUsesNonExemptEncryption: false
@@ -36,9 +36,22 @@ targets:
         NSSpeechRecognitionUsageDescription: "Wake word algılaması (örn: \"mate\") için cihaz üzerinde konuşma tanıma kullanır."
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-          NSAllowsArbitraryLoads: true
         UIBackgroundModes:
           - audio
+    postBuildScripts:
+      # Her arşiv (Release build) build numarasını +1 artırır. Sayaç build.number
+      # dosyasında tutulur (xcodegen Info.plist'i her sefer ürettiği için kalıcı
+      # sayaç dışarıda saklanır). Debug/⌘R'de çalışmaz. İlk arşiv → 2.
+      - name: "Build numarasını artır (Release/arşiv)"
+        basedOnDependencyAnalysis: false
+        script: |
+          if [ "${CONFIGURATION}" != "Release" ]; then exit 0; fi
+          counter="${PROJECT_DIR}/build.number"
+          n=$(cat "$counter" 2>/dev/null || echo 1)
+          n=$((n + 1))
+          echo "$n" > "$counter"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $n" "${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+          echo "[build] CFBundleVersion -> $n"
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: uk.drascom.mate
