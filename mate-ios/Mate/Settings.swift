@@ -25,7 +25,7 @@ final class SettingsStore: ObservableObject {
     @Published var bridgeWSURL: String { didSet { defaults.set(bridgeWSURL, forKey: "bridgeWSURL") } }
 
     init() {
-        self.bridgeApiKey = defaults.string(forKey: "bridgeApiKey") ?? ""
+        self.bridgeApiKey = defaults.string(forKey: "bridgeApiKey") ?? "benimsecrettokenim"
         self.voice = defaults.string(forKey: "voice") ?? "ayhan.mp3"
         self.language = defaults.string(forKey: "language") ?? "tr"
         self.wakeWordEnabled = defaults.object(forKey: "wakeWordEnabled") as? Bool ?? true

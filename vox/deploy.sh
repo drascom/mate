@@ -14,6 +14,7 @@ rsync -az --delete \
   --exclude '.gradio/' \
   --exclude '.git/' \
   --exclude '.DS_Store' \
+  --exclude '.env' \
   --exclude '*.pyc' \
   --exclude 'turkce_test.wav' \
   --exclude 'zaman_sample.wav' \

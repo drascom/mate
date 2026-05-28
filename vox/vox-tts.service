@@ -9,8 +9,10 @@ WorkingDirectory=__DEST__
 Environment=VOX_DEVICE=cuda
 Environment=VOX_PORT=8808
 Environment=VOX_WARMUP=1
-# Auth açmak için: Environment=VOX_API_KEY=...  (iOS Settings'te aynı token)
 Environment=HF_HUB_DISABLE_XET=1
+# Secret'lar (VOX_API_KEY vb.) buradan yüklenir. "-" prefix'i: dosya yoksa
+# servis hâlâ başlar (auth kapalı kalır). Şablon: vox/.env.example
+EnvironmentFile=-__DEST__/.env
 ExecStart=__DEST__/.venv/bin/uvicorn server:app --host 0.0.0.0 --port 8808 --workers 1
 Restart=always
 RestartSec=3
